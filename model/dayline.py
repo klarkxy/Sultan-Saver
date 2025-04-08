@@ -1,0 +1,2 @@
+class DayLine:
+    pass
