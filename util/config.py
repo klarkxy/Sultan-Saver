@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import yaml
 import atexit
 import os
@@ -8,8 +9,8 @@ class Config:
     _config = {}
 
     @staticmethod
-    def get(key):
-        return Config._config.get(key)
+    def get(key, default=None):
+        return Config._config.get(key, default)
 
     @staticmethod
     def set(key, value):
@@ -32,38 +33,6 @@ class Config:
     @staticmethod
     def __contains__(key):
         return key in Config._config
-
-def find_save_data() -> str | List[str] | None:
-    """
-    寻找存档数据位置
-    通常是在类似于“C:\Users\27837\AppData\LocalLow\DoubleCross\SultansGame\SAVEDATA\76561198095514219”的目录下
-    """
-    save_data_dir = os.path.join(
-        os.getenv("LOCALAPPDATA")+"Low",
-        "DoubleCross",
-        "SultansGame",
-        "SAVEDATA",
-    )
-    save_data_path = os.path.join(save_data_dir, Config.get("steam_id"),
-    )
-    if os.path.exists(save_data_path):
-        return save_data_path
-    elif os.path.exists(save_data_dir):
-        save_data_path = []
-        for file in os.listdir(save_data_dir):
-            if os.path.isdir(os.path.join(save_data_dir, file)):
-                save_data_path.append(os.path.join(save_data_dir, file))
-        if len(save_data_path) == 1:
-            return save_data_path[0]
-        return save_data_path
-    else:
-        return None
-
-
-
-
-
-
 
 def load_data():
     if os.path.exists("config.yaml"):
