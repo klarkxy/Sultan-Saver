@@ -130,15 +130,16 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         layout = QHBoxLayout(central_widget)
         central_widget.setLayout(layout)
 
-        # 左侧表格区域 (占1份宽度)
+        # 左侧表格区域
         self.table_widget = QTableWidget(central_widget)
         self.table_widget.setColumnCount(2)
         self.table_widget.setHorizontalHeaderLabels(["存档名称", "修改时间"])
         self.table_widget.horizontalHeader().setStretchLastSection(True)
         self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
-        layout.addWidget(self.table_widget, 1)
+        self.table_widget.setEditTriggers(QTableWidget.NoEditTriggers)  # 设置为只读模式
+        layout.addWidget(self.table_widget, 2)
 
-        # 右侧内容区域 (占3份宽度)
+        # 右侧内容区域
         self.content_frame = QFrame(central_widget)
         self.content_frame.setFrameShape(QFrame.StyledPanel)
         layout.addWidget(self.content_frame, 3)
@@ -148,11 +149,7 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         self.content_frame.setLayout(content_layout)
 
         # 添加操作按钮
-        self.rename_btn = QPushButton("重命名存档", self.content_frame)
-        self.rename_btn.clicked.connect(self.rename_save)
-        content_layout.addWidget(self.rename_btn)
-
-        self.load_btn = QPushButton("读取存档", self.content_frame)
+        self.load_btn = QPushButton("加载存档", self.content_frame)
         self.load_btn.clicked.connect(self.load_save)
         content_layout.addWidget(self.load_btn)
 
