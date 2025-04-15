@@ -3,8 +3,8 @@ from PyQt5.QtWidgets import (
     QWidget,
     QMainWindow,
     QHBoxLayout,
-    QListWidget,
-    QListWidgetItem,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QFrame,
     QFileDialog,
@@ -62,24 +62,30 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
 
     def refresh_save_list(self):
         # 刷新存档列表
-        self.list_widget.clear()
+        self.table_widget.setRowCount(0)
         for file_path in self.round_raw_files:
             if (
                 file_path.endswith(".json")
                 and os.path.basename(file_path) not in _ignore_json
             ):
                 file_name = os.path.basename(file_path)
-
                 display_name = os.path.splitext(file_name)[0]
-
                 mod_time = os.path.getmtime(file_path)
                 time_str = datetime.fromtimestamp(mod_time).strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
-                item = QListWidgetItem(f"{display_name} ({time_str})")
 
-                item.setData(1, file_path)
-                self.list_widget.addItem(item)
+                row = self.table_widget.rowCount()
+                self.table_widget.insertRow(row)
+
+                # 添加存档名称
+                name_item = QTableWidgetItem(display_name)
+                name_item.setData(1, file_path)  # 保持文件路径存储方式不变
+                self.table_widget.setItem(row, 0, name_item)
+
+                # 添加修改时间
+                time_item = QTableWidgetItem(time_str)
+                self.table_widget.setItem(row, 1, time_item)
 
     def __del__(self):
         self.observer.stop()
@@ -124,9 +130,13 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         layout = QHBoxLayout(central_widget)
         central_widget.setLayout(layout)
 
-        # 左侧列表区域 (占1份宽度)
-        self.list_widget = QListWidget(central_widget)
-        layout.addWidget(self.list_widget, 1)
+        # 左侧表格区域 (占1份宽度)
+        self.table_widget = QTableWidget(central_widget)
+        self.table_widget.setColumnCount(2)
+        self.table_widget.setHorizontalHeaderLabels(["存档名称", "修改时间"])
+        self.table_widget.horizontalHeader().setStretchLastSection(True)
+        self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
+        layout.addWidget(self.table_widget, 1)
 
         # 右侧内容区域 (占3份宽度)
         self.content_frame = QFrame(central_widget)
@@ -168,11 +178,11 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         QMessageBox.about(self, "关于", util.version.about_text())
 
     def rename_save(self):
-        selected = self.list_widget.currentItem()
+        selected = self.table_widget.currentItem()
         if not selected:
             return
 
-        old_path = selected.data(1)  # 假设路径存储在data(1)中
+        old_path = selected.data(1)  # 路径仍然存储在data(1)中
         new_name, ok = QInputDialog.getText(
             self,
             "重命名存档",
@@ -188,7 +198,7 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
                 QMessageBox.warning(self, "错误", f"重命名失败: {str(e)}")
 
     def load_save(self):
-        selected = self.list_widget.currentItem()
+        selected = self.table_widget.currentItem()
         if not selected:
             return
 
