@@ -11,7 +11,10 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QTextEdit,
+    QLabel,
 )
+from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtCore import Qt
 import os
 
 import json
@@ -153,6 +156,9 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         # 窗口初始化
         self.setGeometry(100, 100, 800, 600)
         self.setWindowTitle(f"苏丹的存档（{Config.get('steam_id')}）")
+
+        # 设置窗口图标
+        self.setWindowIcon(QIcon("logo.png"))
 
         # 排序状态
         self.sort_column = 0
