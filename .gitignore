@@ -107,5 +107,4 @@ venv.bak/
 .idea/
 *.iml
 
-# Game save files (based on your project)
-*.json.bak
+*/__pycache__
