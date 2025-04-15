@@ -15,20 +15,19 @@ from PyQt5.QtWidgets import (
 import os
 
 import json
-import ijson
 
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 from util.config import Config
 from datetime import datetime
+import shutil
 import util.version
 
 _ignore_json = [
     "over_record_excerpt.json",
     "global.json",
     "global.json.bak.json",
-    "auto_save.json",
 ]
 
 
@@ -113,6 +112,9 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         self.observer.join()
 
     def on_created(self, event):
+        if event is not FileSystemEvent:
+            # 忽略非文件创建事件
+            return
         if os.path.basename(
             event.src_path
         ) not in _ignore_json and event.src_path.endswith(".json"):
@@ -122,12 +124,28 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
             self.refresh_save_list()
 
     def on_modified(self, event):
+        if event is not FileSystemEvent:
+            # 忽略非文件创建事件
+            return
         if os.path.basename(
             event.src_path
         ) not in _ignore_json and event.src_path.endswith(".json"):
             # 按照修改时间排序倒序，找到列表中对应文件的位置并置顶
             self.round_raw_files.remove(event.src_path)
             self.round_raw_files.insert(0, event.src_path)
+            # 刷新存档列表
+            self.refresh_save_list()
+
+    def on_deleted(self, event):
+        if event is not FileSystemEvent:
+            # 忽略非文件删除事件
+            return
+        if os.path.basename(
+            event.src_path
+        ) not in _ignore_json and event.src_path.endswith(".json"):
+            # 从列表中移除被删除的文件
+            if event.src_path in self.round_raw_files:
+                self.round_raw_files.remove(event.src_path)
             # 刷新存档列表
             self.refresh_save_list()
 
@@ -200,6 +218,10 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         self.load_btn = QPushButton("加载存档", self.content_frame)
         self.load_btn.clicked.connect(self.load_save)
         btn_layout.addWidget(self.load_btn)
+
+        self.delete_btn = QPushButton("删除存档", self.content_frame)
+        self.delete_btn.clicked.connect(self.delete_save)
+        btn_layout.addWidget(self.delete_btn)
         content_layout.addLayout(btn_layout)
 
         # 添加拉伸使按钮在上方
@@ -333,31 +355,57 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         if not selected:
             return
 
-        save_path = selected.data(1)
+        save_path = self.get_choiced_save_path()
         save_dir = os.path.dirname(save_path)
 
         try:
-            # 复制到auto_save.json
-            with open(save_path, "r", encoding="utf-8") as src:
-                data = src.read()
-            with open(
-                os.path.join(save_dir, "auto_save.json"), "w", encoding="utf-8"
-            ) as dst:
-                dst.write(data)
+            # 使用shutil直接复制文件到auto_save.json
+            auto_save_path = os.path.join(save_dir, "auto_save.json")
+            shutil.copy2(save_path, auto_save_path)
 
             # 修改global.json
             global_path = os.path.join(save_dir, "global.json")
             if os.path.exists(global_path):
                 with open(global_path, "r+", encoding="utf-8") as f:
                     global_data = json.load(f)
+                    if global_data["inGame"] == True:
+                        return  # 如果已经在游戏中，则不修改
+                    # 修改global.json中的inGame字段
                     global_data["inGame"] = True
                     f.seek(0)
-                    json.dump(global_data, f, ensure_ascii=False, indent=2)
+                    json.dump(global_data, f, ensure_ascii=False)
                     f.truncate()
 
             QMessageBox.information(self, "成功", "存档已加载")
         except Exception as e:
             QMessageBox.warning(self, "错误", f"加载存档失败: {str(e)}")
+
+    def delete_save(self):
+        selected = self.table_widget.currentItem()
+        if not selected:
+            QMessageBox.warning(self, "警告", "请先选择要删除的存档")
+            return
+
+        save_path = self.get_choiced_save_path()
+        if not save_path:
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要永久删除存档 '{os.path.basename(save_path)}' 吗?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.No:
+            return
+
+        try:
+            os.remove(save_path)
+            self.round_raw_files.remove(save_path)
+            self.refresh_save_list()
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"删除存档失败: {str(e)}")
 
     def change_save_dir(self):
         # 修改存档位置
