@@ -108,3 +108,4 @@ venv.bak/
 *.iml
 
 */__pycache__
+tmp/
