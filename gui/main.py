@@ -60,6 +60,27 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         # 刷新存档列表
         self.refresh_save_list()
 
+    def handle_header_clicked(self, column):
+        # 如果点击的是当前排序列，则反转排序方向
+        if column == self.sort_column:
+            self.sort_order = not self.sort_order
+        else:
+            # 否则设置为新列，默认升序
+            self.sort_column = column
+            self.sort_order = False
+
+        # 根据列类型进行排序
+        if self.sort_column == 0:  # 存档名称(字符串)
+            self.round_raw_files.sort(
+                key=lambda x: os.path.basename(x).lower(), reverse=self.sort_order
+            )
+        else:  # 修改时间(日期)
+            self.round_raw_files.sort(
+                key=lambda x: os.path.getmtime(x), reverse=self.sort_order
+            )
+
+        self.refresh_save_list()
+
     def refresh_save_list(self):
         # 刷新存档列表
         self.table_widget.setRowCount(0)
@@ -95,10 +116,8 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         if os.path.basename(
             event.src_path
         ) not in _ignore_json and event.src_path.endswith(".json"):
-            # 如果是回合存档文件
-            self.round_raw_files.append(event.src_path)
-            # 按照修改时间排序倒序
-            self.round_raw_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            # 如果是回合存档文件，在列表最前面增加
+            self.round_raw_files.insert(0, event.src_path)
             # 刷新存档列表
             self.refresh_save_list()
 
@@ -106,8 +125,9 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         if os.path.basename(
             event.src_path
         ) not in _ignore_json and event.src_path.endswith(".json"):
-            # 按照修改时间排序倒序
-            self.round_raw_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            # 按照修改时间排序倒序，找到列表中对应文件的位置并置顶
+            self.round_raw_files.remove(event.src_path)
+            self.round_raw_files.insert(0, event.src_path)
             # 刷新存档列表
             self.refresh_save_list()
 
@@ -115,6 +135,10 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         # 窗口初始化
         self.setGeometry(100, 100, 800, 600)
         self.setWindowTitle(f"苏丹的存档（{Config.get('steam_id')}）")
+
+        # 排序状态
+        self.sort_column = 0
+        self.sort_order = False  # False=升序, True=降序
 
         self.init_menu()
         self.init_content()
@@ -134,16 +158,21 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         self.table_widget = QTableWidget(central_widget)
         self.table_widget.setColumnCount(2)
         self.table_widget.setHorizontalHeaderLabels(["存档名称", "修改时间"])
+        self.table_widget.setColumnWidth(0, 200)  # 存档名称
+        self.table_widget.setColumnWidth(1, 100)  # 修改时间
         self.table_widget.horizontalHeader().setStretchLastSection(True)
+        self.table_widget.horizontalHeader().sectionClicked.connect(
+            self.handle_header_clicked
+        )
         self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_widget.setEditTriggers(QTableWidget.NoEditTriggers)  # 设置为只读模式
         self.table_widget.itemSelectionChanged.connect(self.update_save_info)
-        layout.addWidget(self.table_widget, 2)
+        layout.addWidget(self.table_widget, 1)
 
         # 右侧内容区域
         self.content_frame = QFrame(central_widget)
         self.content_frame.setFrameShape(QFrame.StyledPanel)
-        layout.addWidget(self.content_frame, 3)
+        layout.addWidget(self.content_frame, 1)
 
         # 右侧内容区域布局
         content_layout = QVBoxLayout(self.content_frame)
@@ -185,6 +214,10 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         self.change_save_dir_action = self.file_menu.addAction("修改游戏存档位置")
         self.change_save_dir_action.triggered.connect(self.change_save_dir)
 
+        # 打开存档目录
+        self.open_save_dir_action = self.file_menu.addAction("打开存档目录")
+        self.open_save_dir_action.triggered.connect(self.open_save_dir)
+
         # 关于
         self.about_menu = self.menu_bar.addMenu("关于")
         self.about_action = self.about_menu.addAction("关于")
@@ -193,6 +226,13 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
     def about(self):
         # 关于对话框
         QMessageBox.about(self, "关于", util.version.about_text())
+
+    def open_save_dir(self):
+        # 打开存档目录
+        if hasattr(self, "save_dir") and os.path.exists(self.save_dir):
+            os.startfile(self.save_dir)
+        else:
+            QMessageBox.warning(self, "警告", "存档目录不存在或未初始化")
 
     def get_choiced_save_path(self) -> str:
         selected = self.table_widget.currentItem()
@@ -213,6 +253,8 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
     def update_save_info(self):
         # 更新存档信息
         save_path = self.get_choiced_save_path()
+        if save_path is None:
+            return
         file_name = os.path.basename(save_path)
         if file_name.endswith(".json"):
             save_name = file_name[:-5]  # 去掉.json后缀
