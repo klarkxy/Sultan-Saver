@@ -28,11 +28,18 @@ def build_executable():
         "--onefile",
         "--windowed",
         "--icon=logo.ico",
-        '--name="Sultan\'s Saver"',
+        "--name=Sultan Saver",
         "--add-data=logo.ico;.",
         "main.py",
     ]
-    subprocess.run(cmd, check=True)
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"错误码: {e.returncode}")
+        print(f"标准输出: {e.stdout}")
+        print(f"错误输出: {e.stderr}")
+        raise
 
 
 if __name__ == "__main__":
