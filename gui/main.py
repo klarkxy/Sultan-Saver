@@ -20,18 +20,28 @@ import os
 import json
 
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileSystemEvent
+from watchdog.events import (
+    FileSystemEventHandler,
+    FileCreatedEvent,
+    FileModifiedEvent,
+    FileSystemEvent,
+    FileDeletedEvent,
+)
 
 from util.config import Config
 from datetime import datetime
 import shutil
+import util.logger
 import util.version
 
 _ignore_json = [
-    "over_record_excerpt.json",
     "global.json",
     "global.json.bak.json",
+    "user_archive.json",  # 官方存档
+    "over_record_excerpt.json",  # 结局存档
 ]
+
+log = util.logger.logger(__name__)
 
 
 class MainWindow(QMainWindow, FileSystemEventHandler):
@@ -45,6 +55,8 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
 
     def init_saves(self):
         if self.observer is not None:
+            # 停止之前的监控
+            log.warning("正在停止之前的监控。")
             self.observer.stop()
             self.observer.join()
         # 初始化存档
@@ -53,12 +65,14 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         for file in os.listdir(self.save_dir):
             if file.endswith(".json"):
                 self.round_raw_files.append(os.path.join(self.save_dir, file))
+        log.info(f"找到 {len(self.round_raw_files)} 个存档文件。")
         # 按照修改时间排序倒序
         self.round_raw_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
         # 然后开始监控
         self.observer = Observer()
         self.observer.schedule(self, self.save_dir, recursive=False)
         self.observer.start()
+        log.info(f"开始监控存档目录: {self.save_dir}")
         # 刷新存档列表
         self.refresh_save_list()
 
@@ -111,13 +125,19 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
                 self.table_widget.setItem(row, 1, time_item)
 
     def __del__(self):
+        log.info("正在关闭监控。")
         self.observer.stop()
         self.observer.join()
 
     def on_created(self, event):
-        if event is not FileSystemEvent:
+        log.debug(f"触发了创建事件: {type(event)}")
+        if not isinstance(event, FileCreatedEvent):
             # 忽略非文件创建事件
             return
+        log.info(f"创建文件: {event.src_path}")
+        # if os.path.basename(event.src_path) == "auto_save.json":
+        #     self.on_auto_save(self)
+        #     return
         if os.path.basename(
             event.src_path
         ) not in _ignore_json and event.src_path.endswith(".json"):
@@ -127,9 +147,14 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
             self.refresh_save_list()
 
     def on_modified(self, event):
-        if event is not FileSystemEvent:
+        log.debug(f"触发了修改事件: {type(event)}")
+        if not isinstance(event, FileModifiedEvent):
             # 忽略非文件创建事件
             return
+        log.info(f"修改文件: {event.src_path}")
+        # if os.path.basename(event.src_path) == "auto_save.json":
+        #     self.on_auto_save(self)
+        #     return
         if os.path.basename(
             event.src_path
         ) not in _ignore_json and event.src_path.endswith(".json"):
@@ -140,9 +165,11 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
             self.refresh_save_list()
 
     def on_deleted(self, event):
-        if event is not FileSystemEvent:
+        log.debug(f"触发了删除事件: {type(event)}")
+        if not isinstance(event, FileDeletedEvent):
             # 忽略非文件删除事件
             return
+        log.warning(f"删除文件: {event.src_path}")
         if os.path.basename(
             event.src_path
         ) not in _ignore_json and event.src_path.endswith(".json"):
@@ -291,6 +318,7 @@ class MainWindow(QMainWindow, FileSystemEventHandler):
         try:
             with open(save_path, "r", encoding="utf8") as f:
                 save_data = json.load(f)
+            log.debug(f"读取存档: {save_path}")
 
             character_name = save_data.get("name", "未知")
             difficulty = save_data.get("difficulty", "未知")
